@@ -112,7 +112,7 @@ impl AccountsDb {
         Ok(())
     }
 
-    fn maybe_handle_sysvar_account(
+    pub(crate) fn maybe_handle_sysvar_account(
         &mut self,
         pubkey: Address,
         account: &AccountSharedData,

@@ -336,13 +336,16 @@ fn restore_from_state(state: LiteSVMState) -> Result<LiteSVM, PersistenceError> 
     svm.set_airdrop_keypair(airdrop_kp);
     svm.set_latest_blockhash(state.latest_blockhash);
 
-    // Bulk-insert all accounts. The `set_account` method auto-populates:
-    // - programs_cache for executable accounts (via load_program)
-    // - sysvar_cache for sysvar accounts (via maybe_handle_sysvar_account)
+    // Two-pass account loading:
+    // Pass 1: Insert all accounts without loading programs into cache.
+    //         This avoids MissingAccount errors when upgradeable programs are
+    //         inserted before their ProgramData accounts.
     for (address, account_shared_data) in state.accounts {
         let account: Account = account_shared_data.into();
-        svm.set_account(address, account)?;
+        svm.set_account_no_checks(address, account);
     }
+    // Pass 2: Rebuild sysvar cache and program cache now that all accounts exist.
+    svm.rebuild_caches()?;
 
     // Restore the transaction history.
     let history_entries = state

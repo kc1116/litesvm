@@ -1799,6 +1799,37 @@ impl LiteSVM {
     ) {
         self.history.restore_from_entries(entries);
     }
+
+    /// Inserts an account without loading programs into cache or updating sysvars.
+    /// Used for bulk account restoration — call `load_all_programs()` after all
+    /// accounts have been inserted.
+    pub fn set_account_no_checks(&mut self, address: Address, data: Account) {
+        let shared: AccountSharedData = data.into();
+        if shared.lamports() == 0 {
+            self.accounts.inner.remove(&address);
+        } else {
+            self.accounts.add_account_no_checks(address, shared);
+        }
+    }
+
+    /// Rebuilds sysvar cache and program cache from existing accounts.
+    /// Must be called after bulk `set_account_no_checks` to make programs executable
+    /// and sysvars available.
+    pub fn rebuild_caches(&mut self) -> Result<(), LiteSVMError> {
+        // Rebuild sysvar cache from sysvar accounts
+        let sysvar_accounts: Vec<(Address, AccountSharedData)> = self
+            .accounts
+            .inner
+            .iter()
+            .filter(|(_, acc)| acc.owner() == &solana_sdk_ids::sysvar::ID)
+            .map(|(k, v)| (*k, v.clone()))
+            .collect();
+        for (pubkey, account) in sysvar_accounts {
+            let _ = self.accounts.maybe_handle_sysvar_account(pubkey, &account);
+        }
+        // Rebuild program cache
+        self.accounts.load_all_existing_programs()
+    }
 }
 
 #[cfg(feature = "invocation-inspect-callback")]
